@@ -12,11 +12,12 @@ max_iters = 3000 # number of training iterations
 eval_interval = 300
 eval_iters = 200
 learning_rate = 1e-2
+n_embd = 32
 # ---------------------------------------------------------------------------------------------------------------- #
 
 # device
-device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-#device = "cpu"
+#device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+device = "cpu"
 
 print(f"Device: {device}")
 
@@ -72,16 +73,22 @@ def get_batch(split):
 # bigram model
 class BigramLanguageModel(nn.Module):
 
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
         # every token directly reads the logits of the next token from the lookup table
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets=None):
+        B, T = idx.shape
 
         # idx and targtets are both (B, T) tensors of integers
-        logits = self.token_embedding_table(idx) # logist are (B, T, C) where C = vocab_size
-
+        tok_emb = self.token_embedding_table(idx) # token embeddings (B, T, C) where C = n_embd
+        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, C) where C = n_embd
+        x = tok_emb + pos_emb # due to brodcasting of pos_emb to (B, T, C) we get that x has also dimensions (B, T, C)
+        logits = self.lm_head(x) # logits (B, T, C) where C = vocab_size
+        
         if targets is None:
             loss = None
         else:
@@ -113,7 +120,7 @@ class BigramLanguageModel(nn.Module):
         
         return idx
     
-model = BigramLanguageModel(vocab_size)
+model = BigramLanguageModel()
 m = model.to(device)
 
 # create torch optimizer
