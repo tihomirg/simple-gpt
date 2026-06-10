@@ -8,10 +8,10 @@ import torch.nn.functional as F
 batch_size = 32 # number of sequences that will be processed in parallel
 block_size = 8 # max context length
 train_set_size = 0.9 # x 100%
-max_iters = 3000 # number of training iterations
+max_iters = 5000 # number of training iterations
 eval_interval = 300
 eval_iters = 200
-learning_rate = 1e-2
+learning_rate = 1e-3
 n_embd = 32
 # ---------------------------------------------------------------------------------------------------------------- #
 
@@ -70,6 +70,28 @@ def get_batch(split):
     x, y = x.to(device), y.to(device)
     return x, y
 
+class Head(nn.Module):
+    
+    def __init__(self, head_size):
+        super().__init__()
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size))) # not a parameter of the module, but the mask that we will keep and move to a device
+
+    def forward(self, x):
+        B, T, C = x.shape # (B, T, C) where C = n_embd
+
+        q = self.query(x) # (B, T, C) where C = head_size
+        k = self.key(x)   # (B, T, C) where C = head_size
+        v = self.value(x) # (B, T, C) where C = head_size
+
+        weight = q @ k.transpose(-2, -1) * (C ** -0.5) # (B, T, C) @ (B, C, T) -> (B, T, T)
+        weight = weight.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
+        weight = F.softmax(weight, dim=-1)
+
+        return weight @ v # (B, T, T) @ (B, T, C) -> (B, T, C) where C = head_size
+
 # bigram model
 class BigramLanguageModel(nn.Module):
 
@@ -78,6 +100,7 @@ class BigramLanguageModel(nn.Module):
         # every token directly reads the logits of the next token from the lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.sa_head = Head(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets=None):
@@ -87,6 +110,7 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding_table(idx) # token embeddings (B, T, C) where C = n_embd
         pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, C) where C = n_embd
         x = tok_emb + pos_emb # due to brodcasting of pos_emb to (B, T, C) we get that x has also dimensions (B, T, C)
+        x = self.sa_head(x) # apply a head of self-attention
         logits = self.lm_head(x) # logits (B, T, C) where C = vocab_size
         
         if targets is None:
@@ -106,8 +130,11 @@ class BigramLanguageModel(nn.Module):
 
         for _ in range(max_next_tokens):
             
+            # crop idx to the last block_size tokens
+            idx_cond = idx[:, -block_size:]
+
             # make a prediction
-            logits, _ = self(idx) # (B, T, C)
+            logits, _ = self(idx_cond) # (B, T, C)
 
             # focus onto the last element
             logits = logits[:, -1, :] # (B, C)
