@@ -143,7 +143,7 @@ class Head(nn.Module):
         return weight @ v # (B, T, T) @ (B, T, C) -> (B, T, C) where C = head_size
 
 # bigram model
-class BigramLanguageModel(nn.Module):
+class SimpleGPT(nn.Module):
 
     def __init__(self):
         super().__init__()
@@ -199,11 +199,13 @@ class BigramLanguageModel(nn.Module):
         
         return idx
     
-model = BigramLanguageModel()
+model = SimpleGPT()
 m = model.to(device)
 
 # create torch optimizer
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
+
+print(sum(p.numel() for p in m.parameters())/1e6, "M parameters")
 
 # function that estimates losses
 @torch.no_grad()
