@@ -71,13 +71,27 @@ def get_batch(split):
     x, y = x.to(device), y.to(device)
     return x, y
 
+class Block(nn.Module):
+
+    def __init__(self, n_embd, n_head):
+        super().__init__()
+        head_size = n_embd // n_head
+        self.heads = MultiHeadAttention(n_head, head_size)
+        self.ffwd = FeedForward(n_embd)
+    
+    def forward(self, x):
+        x = x + self.heads(x) # introducing residual skip connections
+        x = x + self.ffwd(x)
+        return x
+
 class FeedForward(nn.Module):
 
     def __init__(self, n_embd):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embd, n_embd),
-            nn.ReLU()
+            nn.Linear(n_embd, 4 * n_embd),
+            nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),            
         )
 
     def forward(self, x):
@@ -88,9 +102,12 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, number_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(number_heads)])
+        self.proj = nn.Linear(n_embd, n_embd)
 
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)
+        out = torch.cat([h(x) for h in self.heads], dim=-1)
+        out = self.proj(out)
+        return out
 
 class Head(nn.Module):
     
@@ -122,8 +139,11 @@ class BigramLanguageModel(nn.Module):
         # every token directly reads the logits of the next token from the lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.sa_heads = MultiHeadAttention(head_number, n_embd // head_number)
-        self.ffwd = FeedForward(n_embd)
+        self.blocks = nn.Sequential(
+            Block(n_embd, head_number),
+            Block(n_embd, head_number),
+            Block(n_embd, head_number),
+        )
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets=None):
@@ -133,8 +153,7 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding_table(idx) # token embeddings (B, T, C) where C = n_embd
         pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, C) where C = n_embd
         x = tok_emb + pos_emb # due to brodcasting of pos_emb to (B, T, C) we get that x has also dimensions (B, T, C)
-        x = self.sa_heads(x) # apply a head of self-attention
-        x = self.ffwd(x)
+        x = self.blocks(x) # (B, T, C)
         logits = self.lm_head(x) # logits (B, T, C) where C = vocab_size
         
         if targets is None:
