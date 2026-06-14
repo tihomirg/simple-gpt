@@ -1,7 +1,5 @@
 # SimpleGPT: Recreating a Transformer from Scratch
 
-# Character-Level GPT
-
 This repository contains an educational, character-level Generative Pre-trained Transformer (GPT) that I recreated completely from scratch in PyTorch for my own learning purposes. 
 
 My primary objective was to implement the transformer architecture exactly as detailed in the seminal 2017 paper, ["Attention Is All You Need"](https://arxiv.org/pdf/1706.03762). To guide this process, I relied on the step-by-step implementation provided by Andrej Karpathy in his acclaimed online lecture, ["Let's build GPT: from scratch, in code, spelled out."](https://www.youtube.com/watch?v=kCc8FmEb1nY). I highly encourage anyone interested in deep learning to watch Karpathy's video and the rest of his [*Neural Network: Zero to Hero*](https://www.youtube.com/playlist?list=PLAqhIrjkxbuWI23v9cThsA9GvCAUhRvKZ) series, as it provides exceptionally high-quality content that clarifies complex concepts. By rebuilding this project line by line, my goal was to deeply understand and master the internal mechanics, mathematical foundations, and structural shifts of modern autoregressive language models, shifting from a theoretical understanding to practical engineering experience in PyTorch.
